@@ -1,0 +1,1120 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Public, verified read-only data for the LLM Credit platform. Financial operations remain unavailable until contracts and funding are configured.
+servers:
+  - url: /api
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /protocol/status:
+    get:
+      operationId: getProtocolStatus
+      responses:
+        "200":
+          description: Actual configuration and connected-service status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolStatus"
+  /protocol/activity:
+    get:
+      operationId: getProtocolActivity
+      responses:
+        "200":
+          description: Only confirmed activity from the platform event ledger
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+  /market/stock-tokens:
+    get:
+      operationId: listStockTokens
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+            maxLength: 32
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 12
+      responses:
+        "200":
+          description: Verified Robinhood-issued on-chain Stock Token metadata; not a swap quote
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockToken"
+  /protocol/economics:
+    get:
+      operationId: getProtocolEconomics
+      responses:
+        "200":
+          description: Founder-specified economics, not a promise that rewards are active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolEconomics"
+  /auth/me:
+    get:
+      operationId: getAuthenticatedSession
+      security:
+        - privyBearer: []
+      responses:
+        "200":
+          description: Verified Privy session identity; no wallet balances are included
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedSession"
+        "401":
+          description: Missing or invalid Privy access token
+        "503":
+          description: Privy server verification is not configured
+  /auth/wallet/challenge:
+    post:
+      operationId: createWalletOwnershipChallenge
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WalletChallengeRequest" }
+      responses:
+        "201":
+          description: Short-lived EIP-191 challenge; sign exactly the returned message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalletChallengeResponse" }
+        "400": { description: Invalid wallet or intent }
+        "503": { description: Linking configuration unavailable }
+  /auth/wallet/verify:
+    post:
+      operationId: verifyWalletOwnershipChallenge
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WalletVerifyRequest" }
+      responses:
+        "200":
+          description: Wallet signature verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalletOwnershipResponse" }
+        "400": { description: "Invalid, expired, replayed, or mismatched signature" }
+        "409": { description: Wallet is already owned by another user }
+        "503": { description: Database or configuration unavailable }
+  /auth/wallets:
+    get:
+      operationId: listVerifiedWallets
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Active owner-scoped verified payer wallets across chains
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerifiedWalletListResponse" }
+        "503": { description: Wallet ownership database unavailable }
+  /auth/solana/challenge:
+    post:
+      operationId: createSolanaWalletChallenge
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SolanaWalletChallengeRequest" }
+      responses:
+        "201":
+          description: Short-lived Solana mainnet ownership challenge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SolanaWalletChallengeResponse" }
+        "400": { description: Invalid Solana wallet address }
+        "503": { description: APP_DOMAIN/X_LINK_DOMAIN or database unavailable }
+  /auth/solana/verify:
+    post:
+      operationId: verifySolanaWalletChallenge
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SolanaWalletVerifyRequest" }
+      responses:
+        "200":
+          description: Solana Ed25519 proof verified and ownership stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SolanaWalletOwnershipResponse" }
+        "400": { description: "Invalid, expired, replayed, or mismatched proof" }
+        "409": { description: Solana wallet or owner already has another verified wallet }
+        "503": { description: APP_DOMAIN/X_LINK_DOMAIN or database unavailable }
+  /credit/config:
+    get:
+      operationId: getCreditConfiguration
+      responses:
+        "200":
+          description: Public mainnet credit network, contract, routing, and capability configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditConfigurationResponse" }
+  /credit/account:
+    get:
+      operationId: getCreditAccount
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Authenticated owner's finalized Robinhood Chain credit account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditAccountResponse" }
+        "409": { description: Verified Robinhood Chain wallet is required }
+        "503": { description: Finalized vault account is unavailable }
+  /credit/activity:
+    get:
+      operationId: getCreditActivity
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Owner-scoped recent credit purchase, redemption, swap, and quote activity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditActivityResponse" }
+        "409": { description: Verified Robinhood Chain wallet is required }
+        "503": { description: Credit activity is unavailable }
+  /credit/quote:
+    post:
+      operationId: createCreditQuote
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreditQuoteRequest" }
+      responses:
+        "201":
+          description: Owner-bound executable quote with exact approved transfers and expiry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditQuoteResponse" }
+        "400": { description: "Invalid mode, chain, asset, or decimal amount" }
+        "409": { description: Verified payer wallet or finalized source balance is unavailable }
+        "503": { description: Mainnet quote or required capability is unavailable }
+  /credit/confirm:
+    post:
+      operationId: confirmCreditQuote
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreditConfirmationRequest" }
+      responses:
+        "200":
+          description: Finalized transaction and settlement result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditConfirmationResponse" }
+        "202":
+          description: Finalized transaction result is pending reconciliation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditConfirmationResponse" }
+        "400": { description: Transaction does not match the quote or chain }
+        "404": { description: Quote is not owned by this account }
+        "409": { description: "Quote expired, wallet changed, or transaction replay rejected" }
+        "503": { description: Finalized settlement requires reconciliation }
+  /credit/reconcile:
+    post:
+      operationId: reconcileCreditQuote
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreditReconcileRequest" }
+      responses:
+        "200":
+          description: Reconciled finalized settlement result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditConfirmationResponse" }
+        "202":
+          description: Settlement is still pending reconciliation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditConfirmationResponse" }
+        "404": { description: Quote is not owned by this account }
+        "409": { description: Quote has no transaction eligible for reconciliation }
+        "503": { description: Settlement reconciliation is temporarily unavailable }
+  /auth/x/link:
+    get:
+      operationId: startXAccountLink
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Same-origin clients receive a URL and should navigate the browser to it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/XAuthorizationStartResponse" }
+        "302": { description: Browser navigation redirect to X OAuth 2 authorization with PKCE }
+        "400": { description: Verified wallet required }
+        "503": { description: X OAuth configuration unavailable }
+  /auth/x/account:
+    get:
+      operationId: getLinkedXAccount
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Owner-scoped verified X mapping; no OAuth token is returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/XAccountStatusResponse" }
+        "503": { description: Linking configuration or database unavailable }
+  /auth/x/callback:
+    get:
+      operationId: completeXAccountLink
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string, minLength: 1 } }
+        - { in: query, name: state, required: true, schema: { type: string, minLength: 32 } }
+      responses:
+        "200":
+          description: Independently verified X account linked to the Privy user and wallet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/XAccountLinkResponse" }
+        "400": { description: Invalid or expired state or OAuth callback }
+        "409": { description: X account is already linked to another user }
+        "503": { description: X OAuth configuration unavailable }
+  /auth/x/unlink:
+    post:
+      operationId: unlinkXAccount
+      security: [{ privyBearer: [] }]
+      responses:
+        "204": { description: X account unlinked }
+        "404": { description: No linked X account }
+        "503": { description: Linking configuration unavailable }
+  /x-bot/status:
+    get:
+      operationId: getXBotStatus
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Owner-scoped linked-account status and X bot connectivity/configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/XBotStatus" }
+        "503": { description: X bot status is temporarily unavailable }
+  /x-bot/commands:
+    post:
+      operationId: processXBotCommand
+      security: [{ xBotServiceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/XBotCommandInput" }
+      responses:
+        "200":
+          description: Canonical tweet command result with at-most-once reply status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/XBotCommandResponse" }
+        "401": { description: Invalid X bot service authorization }
+        "404": { description: Canonical X tweet not found }
+        "503": { description: X bot processing is unavailable or outcome is uncertain }
+  /customer/api-keys:
+    get:
+      operationId: listCustomerApiKeys
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: User-owned platform API keys; secrets are never returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformApiKey"
+    post:
+      operationId: createCustomerApiKey
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlatformApiKey"
+      responses:
+        "201":
+          description: API key secret, returned exactly once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedPlatformApiKey"
+        "503":
+          description: Privy or durable database is not configured
+        "403": { description: A verified chain 4663 wallet is required to bind the key to its owner }
+  /customer/api-keys/{id}:
+    delete:
+      operationId: revokeCustomerApiKey
+      security: [{ privyBearer: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Revoked }
+        "404": { description: Key not found }
+  /customer/v1/chat/completions:
+    post:
+      operationId: createCustomerChatCompletion
+      security: [{ platformApiKey: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerChatRequest"
+      responses:
+        "200":
+          description: Metered provider completion after a confirmed on-chain reservation and settlement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerChatResponse"
+        "402": { description: Verified credit balance or reserve is insufficient }
+        "401": { description: Platform API key is invalid or revoked }
+        "503": { description: "Provider, current pricing, or on-chain vault configuration is unavailable; uncertain outcomes remain held" }
+        "429": { description: Per-key/per-owner rate limit or exact daily service-credit budget exceeded }
+  /customer/models:
+    get:
+      operationId: listCustomerModels
+      responses:
+        "200":
+          description: Supported models and the live upstream catalogue with exact configured provider rates and availability
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerModelsCatalog" }
+        "503": { description: OpenRouter's live catalog could not be loaded }
+  /customer/playground:
+    post:
+      operationId: createCustomerPlaygroundCompletion
+      security: [{ privyBearer: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerChatRequest" }
+      responses:
+        "200":
+          description: Owner-scoped metered completion using the same billing engine as customer API keys
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerChatResponse" }
+        "402": { description: Insufficient on-chain available balance }
+        "503": { description: "Provider, current pricing, or on-chain vault configuration is unavailable" }
+        "429": { description: Per-key/per-owner rate limit or exact daily service-credit budget exceeded }
+  /customer/usage:
+    get:
+      operationId: listCustomerUsage
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Auditable owner-scoped usage records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UsageRecord"
+  /customer/accounting:
+    get:
+      operationId: getCustomerAccounting
+      security: [{ privyBearer: [] }]
+      responses:
+        "200":
+          description: Owner-scoped metered receipts and exact provider costs; cashback is null unless confirmed receipts are available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerAccountingResponse" }
+  /customer/reconcile:
+    post:
+      operationId: reconcileCustomerRequest
+      security: [{ privyBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerReconcileRequest" }
+      responses:
+        "200":
+          description: Owner-scoped metering state after request-specific on-chain reconciliation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerReconcileResponse" }
+        "202":
+          description: Request remains pending; inference will not be redispatched
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerReconcileResponse" }
+        "404": { description: No customer request with this ID belongs to the authenticated owner }
+        "400": { description: Invalid request body }
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    FeatureStatus:
+      type: object
+      required: [enabled, reason]
+      properties:
+        enabled:
+          type: boolean
+        reason:
+          type: string
+    ProtocolStatus:
+      type: object
+      required: [network, chainId, checkedAt, credits, trading, staking, cashback, customerApi, xBot, x402]
+      properties:
+        network:
+          type: string
+        chainId:
+          type: integer
+        checkedAt:
+          type: string
+          format: date-time
+        credits:
+          $ref: "#/components/schemas/FeatureStatus"
+        trading:
+          $ref: "#/components/schemas/FeatureStatus"
+        staking:
+          $ref: "#/components/schemas/FeatureStatus"
+        cashback:
+          $ref: "#/components/schemas/FeatureStatus"
+        customerApi:
+          $ref: "#/components/schemas/FeatureStatus"
+        xBot:
+          $ref: "#/components/schemas/FeatureStatus"
+        x402:
+          $ref: "#/components/schemas/FeatureStatus"
+    ActivityEvent:
+      type: object
+      required: [id, type, title, occurredAt, sourceUrl]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        sourceUrl:
+          type: string
+    StockToken:
+      type: object
+      required: [symbol, name, address, decimals, status, tradingSession, logoUrl]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        decimals:
+          type: integer
+        status:
+          type: string
+        tradingSession:
+          type: string
+        logoUrl:
+          type: string
+    StakeTerm:
+      type: object
+      required: [days, termPercent]
+      properties:
+        days:
+          type: integer
+        termPercent:
+          type: number
+    ProtocolEconomics:
+      type: object
+      required: [creditsPerUsdOfService, projectTokenBonusPercent, stakeTerms, cashbackPercent, cashbackHourlyCapUsdg, cashbackCooldownMinutes, cashbackEligibleEvents, cashbackExcludedPatterns, xMentionsEligible, rewardsActive]
+      properties:
+        creditsPerUsdOfService:
+          type: integer
+        projectTokenBonusPercent:
+          type: number
+        stakeTerms:
+          type: array
+          items:
+            $ref: "#/components/schemas/StakeTerm"
+        cashbackPercent:
+          type: number
+        cashbackHourlyCapUsdg:
+          type: number
+        cashbackCooldownMinutes:
+          type: integer
+        cashbackEligibleEvents:
+          type: array
+          items:
+            type: string
+        cashbackExcludedPatterns:
+          type: array
+          items:
+            type: string
+        xMentionsEligible:
+          type: boolean
+        rewardsActive:
+          type: boolean
+    AuthenticatedSession:
+      type: object
+      required: [provider, userId, sessionId, verifiedAt]
+      properties:
+        provider:
+          type: string
+          enum: [privy]
+        userId:
+          type: string
+        sessionId:
+          type: string
+        verifiedAt:
+          type: string
+          format: date-time
+    WalletChallengeRequest:
+      type: object
+      required: [walletAddress, chainId, intent]
+      additionalProperties: false
+      properties:
+        walletAddress: { type: string, pattern: "^0x[a-fA-F0-9]{40}$" }
+        chainId: { type: string, pattern: "^[0-9]{1,20}$" }
+        intent: { type: string, enum: [link_x, verify_wallet] }
+    WalletChallengeResponse:
+      type: object
+      required: [challengeId, message, expiresAt, walletAddress, chainId]
+      properties:
+        challengeId: { type: string }
+        message: { type: string }
+        walletAddress: { type: string }
+        chainId: { type: string }
+        expiresAt: { type: string, format: date-time }
+    WalletVerifyRequest:
+      type: object
+      required: [challengeId, signature]
+      additionalProperties: false
+      properties:
+        challengeId: { type: string }
+        signature: { type: string, pattern: "^0x[0-9a-fA-F]{130}$" }
+    WalletOwnershipResponse:
+      type: object
+      required: [walletAddress, chainId, verifiedAt]
+      properties:
+        walletAddress: { type: string }
+        chainId: { type: string }
+        verifiedAt: { type: string, format: date-time }
+    VerifiedWalletListResponse:
+      type: object
+      required: [wallets]
+      properties:
+        wallets:
+          type: array
+          items:
+            type: object
+            required: [walletAddress, chainId, verifiedAt]
+            properties:
+              walletAddress: { type: string }
+              chainId: { type: string }
+              verifiedAt: { type: string, format: date-time }
+    SolanaWalletChallengeRequest:
+      type: object
+      required: [walletAddress]
+      additionalProperties: false
+      properties:
+        walletAddress: { type: string, minLength: 32, maxLength: 44, description: Canonical base58-encoded 32-byte Solana public key. }
+    SolanaWalletChallengeResponse:
+      type: object
+      required: [challengeId, message, expiresAt]
+      properties:
+        challengeId: { type: string, format: uuid }
+        message: { type: string }
+        expiresAt: { type: string, format: date-time }
+    SolanaWalletVerifyRequest:
+      type: object
+      required: [challengeId, signature]
+      additionalProperties: false
+      properties:
+        challengeId: { type: string, format: uuid }
+        signature: { type: string, pattern: "^(?:[A-Za-z0-9+/]{4}){21}[A-Za-z0-9+/]{2}==$" , description: Canonical base64 64-byte Ed25519 signature. }
+    SolanaWalletOwnershipResponse:
+      type: object
+      required: [verified, walletAddress, chainId, verifiedAt]
+      properties:
+        verified: { type: boolean, enum: [true] }
+        walletAddress: { type: string }
+        chainId: { type: string, enum: [solana-mainnet] }
+        verifiedAt: { type: string, format: date-time }
+    XAccountLinkResponse:
+      type: object
+      required: [xAccountId, linkedAt]
+      properties:
+        xAccountId: { type: string }
+        xUsername: { type: string, nullable: true }
+        linkedAt: { type: string, format: date-time }
+    XAuthorizationStartResponse:
+      type: object
+      required: [authorizationUrl]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+    XAccountStatusResponse:
+      type: object
+      required: [linked, xAccountId, xUsername, walletAddress, chainId, linkedAt]
+      properties:
+        linked: { type: boolean }
+        xAccountId: { type: string, nullable: true }
+        xUsername: { type: string, nullable: true }
+        walletAddress: { type: string, nullable: true }
+        chainId: { type: string, nullable: true }
+        linkedAt: { type: string, format: date-time, nullable: true }
+    PlatformApiKey:
+      type: object
+      required: [id, name, prefix, walletAddress, createdAt, revoked]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        prefix: { type: string }
+        walletAddress: { type: ["string", "null"], description: Immutable verified-wallet snapshot for this key. }
+        createdAt: { type: string, format: date-time }
+        revoked: { type: boolean }
+    CreatePlatformApiKey:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+    CreatedPlatformApiKey:
+      allOf:
+        - $ref: "#/components/schemas/PlatformApiKey"
+        - type: object
+          required: [secret]
+          properties:
+            secret: { type: string, description: Returned exactly once; store securely. }
+    CustomerChatRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model: { type: string, minLength: 1, maxLength: 200 }
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: object
+            required: [role, content]
+            properties:
+              role: { type: string, enum: [system, user, assistant] }
+              content: { type: string, minLength: 1, maxLength: 20000 }
+        maxOutputTokens: { type: integer, minimum: 1, maximum: 8192, default: 1024 }
+    CustomerChatResponse:
+      type: object
+      required: [id, model, content, usage, creditsCharged, creditsChargedExact, providerCostUsdExact, creditUnit, cashbackUsdExact, remainingCredits, remainingCreditsExact]
+      properties:
+        id: { type: string }
+        model: { type: string }
+        content: { type: string }
+        usage:
+          type: object
+          required: [inputTokens, outputTokens]
+          properties:
+            inputTokens: { type: integer }
+            outputTokens: { type: integer }
+        creditsCharged: { type: number, description: Approximate compatibility value; use creditsChargedExact for exact display. }
+        creditsChargedExact: { type: string, description: Exact decimal service credits (1 service credit = $0.01 at the configured provider cost). }
+        providerCostUsdExact: { type: string, description: Exact provider cost in USD with no platform markup. }
+        creditUnit: { type: string, enum: [service_credit] }
+        cashbackUsdExact: { type: ["string", "null"], description: Confirmed cashback only; null means this request has no confirmed cashback receipt. }
+        remainingCredits: { type: ["number", "null"], description: Compatibility display value for available on-chain service credits after settlement. }
+        remainingCreditsExact: { type: ["string", "null"], description: Exact available service credits read from the vault after settlement. }
+    UsageRecord:
+      type: object
+      required: [id, idempotencyKey, status, model, reservedCredits, chargedCredits, refundedCredits, createdAt, reservedCreditsExact, chargedCreditsExact, refundedCreditsExact, provider, providerCostUsdExact, errorCode]
+      properties:
+        id: { type: string }
+        idempotencyKey: { type: string }
+        status: { type: string, enum: [reserving, reserved, charged, reconciling, released] }
+        errorCode: { type: ["string", "null"] }
+        model: { type: string }
+        reservedCredits: { type: integer, format: int64 }
+        chargedCredits: { type: integer, format: int64 }
+        refundedCredits: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        reservedCreditsExact: { type: string }
+        chargedCreditsExact: { type: string }
+        refundedCreditsExact: { type: string }
+        provider: { type: ["string", "null"] }
+        providerCostUsdExact: { type: ["string", "null"] }
+    CustomerModel:
+      type: object
+      required: [provider, id, name, inputCostUsdPerMillion, outputCostUsdPerMillion, cachedInputCostUsdPerMillion, cacheWrite5mCostUsdPerMillion, cacheWrite1hCostUsdPerMillion, cacheReadCostUsdPerMillion, capabilities, available, unavailableReason, maxInputTokens, maxOutputTokens, pricingSource, pricingVerifiedAt, pricingExpiresAt, pricingType]
+      properties:
+        provider: { type: string, enum: [openai, anthropic, gemini, openrouter, jev] }
+        id: { type: string }
+        name: { type: string }
+        inputCostUsdPerMillion: { type: ["string", "null"] }
+        outputCostUsdPerMillion: { type: ["string", "null"] }
+        cachedInputCostUsdPerMillion: { type: ["string", "null"] }
+        cacheWrite5mCostUsdPerMillion: { type: ["string", "null"] }
+        cacheWrite1hCostUsdPerMillion: { type: ["string", "null"] }
+        cacheReadCostUsdPerMillion: { type: ["string", "null"] }
+        capabilities:
+          type: array
+          items: { type: string }
+        available: { type: boolean }
+        unavailableReason: { type: ["string", "null"] }
+        maxInputTokens: { type: integer }
+        maxOutputTokens: { type: integer }
+        pricingSource: { type: ["string", "null"], format: uri }
+        pricingVerifiedAt: { type: ["string", "null"], format: date-time }
+        pricingExpiresAt: { type: ["string", "null"], format: date-time }
+        pricingType: { type: string, enum: [token-breakdown, reported-cost, unavailable] }
+    CustomerModelsCatalog:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerModel" }
+    CustomerAccountingReceipt:
+      type: object
+      required: [id, idempotencyKey, model, provider, status, errorCode, createdAt, completedAt, inputTokens, outputTokens, cachedInputTokens, cacheReadInputTokens, cacheWrite5mTokens, cacheWrite1hTokens, thoughtsTokens, providerCostUsdExact, reservedCreditsExact, chargedCreditsExact, refundedCreditsExact, inputCostUsdPerMillion, outputCostUsdPerMillion, cachedInputCostUsdPerMillion, cacheWrite5mCostUsdPerMillion, cacheWrite1hCostUsdPerMillion, cacheReadCostUsdPerMillion, pricingSource, pricingVerifiedAt, pricingExpiresAt]
+      properties:
+        id: { type: string }
+        idempotencyKey: { type: string }
+        model: { type: string }
+        provider: { type: ["string", "null"] }
+        status: { type: string, enum: [reserving, reserved, charged, reconciling, released] }
+        errorCode: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        inputTokens: { type: ["integer", "null"] }
+        outputTokens: { type: ["integer", "null"] }
+        cachedInputTokens: { type: ["integer", "null"] }
+        cacheReadInputTokens: { type: ["integer", "null"] }
+        cacheWrite5mTokens: { type: ["integer", "null"] }
+        cacheWrite1hTokens: { type: ["integer", "null"] }
+        thoughtsTokens: { type: ["integer", "null"] }
+        providerCostUsdExact: { type: ["string", "null"] }
+        reservedCreditsExact: { type: string }
+        chargedCreditsExact: { type: string }
+        refundedCreditsExact: { type: string }
+        inputCostUsdPerMillion: { type: ["string", "null"] }
+        outputCostUsdPerMillion: { type: ["string", "null"] }
+        cachedInputCostUsdPerMillion: { type: ["string", "null"] }
+        cacheWrite5mCostUsdPerMillion: { type: ["string", "null"] }
+        cacheWrite1hCostUsdPerMillion: { type: ["string", "null"] }
+        cacheReadCostUsdPerMillion: { type: ["string", "null"] }
+        pricingSource: { type: ["string", "null"], format: uri }
+        pricingVerifiedAt: { type: ["string", "null"], format: date-time }
+        pricingExpiresAt: { type: ["string", "null"], format: date-time }
+    CustomerReconcileRequest:
+      type: object
+      required: [ledgerId]
+      additionalProperties: false
+      properties:
+        ledgerId: { type: string, format: uuid }
+    CustomerReconcileResponse:
+      type: object
+      required: [ledgerId, status, errorCode, reservedCreditsExact, chargedCreditsExact, refundedCreditsExact, completedAt]
+      properties:
+        ledgerId: { type: string, format: uuid }
+        status: { type: string, enum: [reserving, reserved, charged, reconciling, released] }
+        errorCode: { type: ["string", "null"] }
+        reservedCreditsExact: { type: string }
+        chargedCreditsExact: { type: string }
+        refundedCreditsExact: { type: string }
+        completedAt: { type: ["string", "null"], format: date-time }
+    CustomerAccountingResponse:
+      type: object
+      required: [receipts, cashback]
+      properties:
+        receipts:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerAccountingReceipt" }
+        cashback:
+          type: ["array", "null"]
+          description: Confirmed customer cashback receipts, or null while no authoritative cashback receipt source exists.
+          items:
+            type: object
+            required: [amountUsdExact, status, sourceId]
+            properties:
+              amountUsdExact: { type: string }
+              status: { type: string }
+              sourceId: { type: string }
+    CreditCapability:
+      type: object
+      required: [enabled, reason]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: ["string", "null"] }
+    CreditConfigurationResponse:
+      type: object
+      required: [network, chainId, rpcUrl, explorerUrl, creditTokenAddress, vaultAddress, purchaseAddress, redeemAddress, treasuryAddress, cashbackAddress, usdgAddress, redeemReserveUsdg, solanaTreasuryAddress, creditsPerUsd, capabilities, missing]
+      properties:
+        network: { type: string }
+        chainId: { type: integer, const: 4663 }
+        rpcUrl: { type: string, format: uri }
+        explorerUrl: { type: string, format: uri }
+        creditTokenAddress: { type: ["string", "null"] }
+        vaultAddress: { type: ["string", "null"] }
+        purchaseAddress: { type: ["string", "null"] }
+        redeemAddress: { type: ["string", "null"] }
+        treasuryAddress: { type: ["string", "null"] }
+        cashbackAddress: { type: ["string", "null"] }
+        usdgAddress: { type: ["string", "null"] }
+        redeemReserveUsdg: { type: ["string", "null"] }
+        solanaTreasuryAddress: { type: ["string", "null"] }
+        solanaExecutorPrograms:
+          type: array
+          items: { type: string }
+        creditsPerUsd: { type: integer, const: 100 }
+        capabilities:
+          type: object
+          required: [account, buy, solanaBuy, solanaSwaps, swap, redeem, cashback, solana, settlement]
+          properties:
+            account: { $ref: "#/components/schemas/CreditCapability" }
+            buy: { $ref: "#/components/schemas/CreditCapability" }
+            solanaBuy: { $ref: "#/components/schemas/CreditCapability" }
+            solanaSwaps: { $ref: "#/components/schemas/CreditCapability" }
+            swap: { $ref: "#/components/schemas/CreditCapability" }
+            redeem: { $ref: "#/components/schemas/CreditCapability" }
+            cashback: { $ref: "#/components/schemas/CreditCapability" }
+            solana: { $ref: "#/components/schemas/CreditCapability" }
+            settlement: { $ref: "#/components/schemas/CreditCapability" }
+        missing:
+          type: array
+          items: { type: string }
+    CreditAccountResponse:
+      type: object
+      required: [walletAddress, chainId, enabled, reason, balanceCredits, depositedCredits, reservedCredits, availableCredits, blockNumber]
+      properties:
+        walletAddress: { type: string }
+        chainId: { type: string, enum: ["4663"] }
+        enabled: { type: boolean }
+        reason: { type: ["string", "null"] }
+        balanceCredits: { type: ["string", "null"] }
+        depositedCredits: { type: ["string", "null"] }
+        reservedCredits: { type: ["string", "null"] }
+        availableCredits: { type: ["string", "null"] }
+        blockNumber: { type: ["string", "null"] }
+    CreditActivityResponse:
+      type: object
+      required: [activity]
+      properties:
+        activity:
+          type: array
+          items:
+            type: object
+            required: [id, quoteId, kind, chain, asset, amount, status, txHash, detail, createdAt]
+            properties:
+              id: { type: string }
+              quoteId: { type: ["string", "null"] }
+              kind: { type: string }
+              chain: { type: string }
+              asset: { type: ["string", "null"] }
+              amount: { type: ["string", "null"] }
+              status: { type: string }
+              txHash: { type: ["string", "null"] }
+              detail: { type: ["string", "null"] }
+              createdAt: { type: string, format: date-time }
+    CreditQuoteRequest:
+      type: object
+      required: [mode, chain, asset, amount]
+      additionalProperties: false
+      properties:
+        mode: { type: string, enum: [buy, swap, redeem] }
+        chain: { type: string, enum: [robinhood, solana] }
+        asset: { type: string, minLength: 1, maxLength: 32 }
+        amount: { type: string, minLength: 1, maxLength: 80, pattern: "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$" }
+    CreditQuoteResponse:
+      type: object
+      required: [quoteId, mode, chain, asset, amount, inputToken, outputToken, inputAmount, outputAmount, netUsdMicros, credits, cashback, chainId, payer, recipientWalletAddress, transactions, transaction, approvals, route, expected, expiresAt]
+      properties:
+        quoteId: { type: string, format: uuid }
+        mode: { type: string, enum: [buy, swap, redeem] }
+        chain: { type: string, enum: [robinhood, solana] }
+        asset: { type: string }
+        amount: { type: string }
+        inputToken: { type: string }
+        outputToken: { type: string }
+        inputAmount: { type: string }
+        outputAmount: { type: string }
+        netUsdMicros: { type: string }
+        credits: { type: ["string", "null"] }
+        cashback:
+          type: object
+          required: [status, percentBps, amountUsdg, recipientAddress]
+          properties:
+            status: { type: string }
+            percentBps: { type: ["integer", "null"] }
+            amountUsdg: { type: ["string", "null"] }
+            recipientAddress: { type: ["string", "null"] }
+            reason: { type: string }
+        chainId: { oneOf: [{ type: integer }, { type: string }] }
+        payer: { type: string }
+        recipientWalletAddress: { type: string }
+        transactions:
+          type: array
+          items:
+            type: object
+            required: [kind, to, data, value]
+            properties:
+              kind: { type: string, enum: [approval, purchase] }
+              to: { type: string }
+              data: { type: string }
+              value: { type: string }
+        transaction:
+          type: object
+          required: [chainId, to, data, value, serialized]
+          properties:
+            chainId: { oneOf: [{ type: integer }, { type: string }] }
+            to: { type: string }
+            data: { type: ["string", "null"] }
+            value: { type: string }
+            serialized: { type: ["string", "null"] }
+            payer: { type: string }
+            recentBlockhash: { type: string }
+            instructions: { type: array, items: {} }
+        approvals:
+          type: array
+          items: { type: object, additionalProperties: true }
+        route: { type: object, additionalProperties: true }
+        expected:
+          type: object
+          required: [to, value, calldata, transfers]
+          properties:
+            to: { type: string }
+            value: { type: string }
+            calldata: { type: ["string", "null"] }
+            transfers:
+              type: array
+              items:
+                type: object
+                required: [tokenAddress, from, to, amount]
+                properties:
+                  tokenAddress: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  amount: { type: string }
+                  sourceAccount: { type: string }
+                  destinationAccount: { type: string }
+                  tokenDecimals: { type: integer }
+        expiresAt: { type: string, format: date-time }
+    CreditConfirmationRequest:
+      type: object
+      required: [quoteId, chain, txHash]
+      additionalProperties: false
+      properties:
+        quoteId: { type: string, format: uuid }
+        chain: { type: string, enum: [robinhood, solana] }
+        txHash: { type: string }
+    CreditReconcileRequest:
+      type: object
+      required: [quoteId]
+      additionalProperties: false
+      properties:
+        quoteId: { type: string, format: uuid }
+    CreditConfirmationResponse:
+      type: object
+      required: [quoteId, status, txHash, settlementTxHash, confirmedAt, creditsIssued, credits, reason, cashback]
+      properties:
+        quoteId: { type: string }
+        status: { type: string, enum: [completed, reconciling] }
+        txHash: { type: string }
+        settlementTxHash: { type: ["string", "null"] }
+        confirmedAt: { type: string, format: date-time }
+        creditsIssued: { type: boolean }
+        credits: { type: ["string", "null"] }
+        reason: { type: ["string", "null"] }
+        cashback:
+          type: object
+          required: [status, amountUsdg, recipientAddress, payoutTxHash]
+          properties:
+            status: { type: string }
+            amountUsdg: { type: ["string", "null"] }
+            recipientAddress: { type: ["string", "null"] }
+            payoutTxHash: { type: ["string", "null"] }
+    XBotStatus:
+      type: object
+      required: [connectivity, configured, linked, xUsername, postingEnabled, missingConfiguration]
+      properties:
+        connectivity: { type: string, enum: [connected, unavailable, not_configured] }
+        configured: { type: boolean }
+        linked: { type: boolean }
+        xUsername: { type: ["string", "null"] }
+        postingEnabled: { type: boolean }
+        missingConfiguration:
+          type: array
+          items: { type: string }
+    XBotCommandInput:
+      type: object
+      required: [mentionId]
+      additionalProperties: false
+      properties:
+        mentionId: { type: string, pattern: "^[0-9]{1,30}$" }
+    XBotCommandResponse:
+      type: object
+      required: [mentionId, intent, commandStatus, replyStatus, replyTweetId]
+      properties:
+        mentionId: { type: string }
+        intent: { type: string }
+        commandStatus: { type: string, enum: [resolved, rejected] }
+        replyStatus: { type: string, enum: [pending, posting, posted, post_unknown, disabled] }
+        replyTweetId: { type: ["string", "null"] }
+  securitySchemes:
+    privyBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    platformApiKey:
+      type: apiKey
+      in: header
+      name: X-Platform-API-Key
+    xBotServiceBearer:
+      type: http
+      scheme: bearer
