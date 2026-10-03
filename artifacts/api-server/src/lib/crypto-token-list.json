@@ -1,0 +1,42 @@
+[
+  {
+    "symbol": "PONS",
+    "address": "0x39dBED3a2bd333467115dE45665cC57F813C4571"
+  },
+  {
+    "symbol": "CASHCAT",
+    "address": "0x020bfC650A365f8BB26819deAAbF3E21291018b4"
+  },
+  {
+    "symbol": "AI",
+    "address": "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18"
+  },
+  {
+    "symbol": "LIT",
+    "address": "0xeeca2E7Dc194a320d349122d88259bB9595a4cB0"
+  },
+  {
+    "symbol": "VIRTUAL",
+    "address": "0xc6911796042b15d7Fa4F6CDe69e245DdCd3d9c31"
+  },
+  {
+    "symbol": "STONKBROKER",
+    "address": "0xe934e36A439C94017B64a3FecE66AF12099aBF50"
+  },
+  {
+    "symbol": "INDEX",
+    "address": "0x56910D4409F3a0C78C64DD8D0545FF0705389870"
+  },
+  {
+    "symbol": "DELTA",
+    "address": "0xe8ffd7e24187F72afB08d75B1bb13088A989a791"
+  },
+  {
+    "symbol": "MEME",
+    "address": "0x385F4f8ae47651ce5F58F5265395a669f8281e18"
+  },
+  {
+    "symbol": "ARROW",
+    "address": "0xf2915d1e3C1B0c769d0c756Ec43F1c1f6c99cD03"
+  }
+]
