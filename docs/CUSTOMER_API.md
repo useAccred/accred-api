@@ -11,6 +11,24 @@ The customer API supports owner-scoped platform keys, an authenticated Playgroun
 
 Successful completion responses preserve `id`, `model`, `content`, and token usage, and add `creditsChargedExact`, `providerCostUsdExact`, `creditUnit: "service_credit"`, and `cashbackUsdExact`. `creditsCharged` remains a numeric compatibility field; clients requiring exact values must display `creditsChargedExact`.
 
+## OpenAI- and Anthropic-compatible routes
+
+Editors and SDKs that cannot send `X-Platform-API-Key` or `Idempotency-Key` use separate compatible routes. They translate the wire format only; every request runs through the same reserve/settle engine, rate limits, and budgets as the native route, which is unchanged.
+
+- `POST /api/customer/openai/v1/chat/completions` — OpenAI Chat Completions shape, including `stream: true` (SSE ending in `data: [DONE]`).
+- `GET /api/customer/openai/v1/models` — OpenAI model list of the currently available text models.
+- `POST /api/customer/anthropic/v1/messages` — Anthropic Messages shape, including `stream: true`.
+- `POST /api/customer/anthropic/v1/messages/count_tokens` — conservative input-token estimate.
+
+The platform key is accepted as `Authorization: Bearer <key>`, `x-api-key: <key>`, or `X-Platform-API-Key`. An `Idempotency-Key` is generated per request when the client does not send one. `max_tokens` / `max_completion_tokens` are clamped to the model's output bound, and default to 4096 when absent. Exact receipt fields are returned under `accred` on non-streaming responses.
+
+Limits of the compatible routes:
+
+- Responses are text only. `tools` are accepted but not forwarded, and prior tool calls/results are passed to the model as plain text, so agentic tool use (Cursor Agent mode, Claude Code file edits) does not work.
+- Streaming replays the finished, settled response as chunks; keepalive frames are sent while the reservation and provider call are in flight.
+- Images and documents are replaced by a placeholder.
+- Request bodies up to 4 MB are accepted on these paths; the model's input bound still applies.
+
 ## Credit units and on-chain safety
 
 - One service credit is one cent at provider cost: **100 service credits = $1**.
