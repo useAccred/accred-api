@@ -13,20 +13,23 @@ Successful completion responses preserve `id`, `model`, `content`, and token usa
 
 ## OpenAI- and Anthropic-compatible routes
 
-Editors and SDKs that cannot send `X-Platform-API-Key` or `Idempotency-Key` use separate compatible routes. They translate the wire format only; every request runs through the same reserve/settle engine, rate limits, and budgets as the native route, which is unchanged.
+Editors and SDKs that cannot send `X-Platform-API-Key` or `Idempotency-Key` use compatible routes. They translate the wire format only; every request runs through the same reserve/settle engine, rate limits, and budgets as the native route, which is unchanged.
 
-- `POST /api/customer/openai/v1/chat/completions` — OpenAI Chat Completions shape, including `stream: true` (SSE ending in `data: [DONE]`).
-- `GET /api/customer/openai/v1/models` — OpenAI model list of the currently available text models.
-- `POST /api/customer/anthropic/v1/messages` — Anthropic Messages shape, including `stream: true`.
-- `POST /api/customer/anthropic/v1/messages/count_tokens` — conservative input-token estimate.
+OpenAI base URL: `https://<host>/api/openai/v1` (the same routes are also served under `/api/customer/v1`).
 
-The platform key is accepted as `Authorization: Bearer <key>`, `x-api-key: <key>`, or `X-Platform-API-Key`. An `Idempotency-Key` is generated per request when the client does not send one. `max_tokens` / `max_completion_tokens` are clamped to the model's output bound, and default to 4096 when absent. Exact receipt fields are returned under `accred` on non-streaming responses.
+- `POST /api/openai/v1/chat/completions` — OpenAI Chat Completions shape, including `stream: true` (SSE ending in `data: [DONE]`).
+- `GET /api/openai/v1/models` — OpenAI model list of the currently available text models.
+- `POST /api/customer/v1/messages` — Anthropic Messages shape, including `stream: true`.
+- `POST /api/customer/v1/messages/count_tokens` — input-token estimate.
+
+On `POST /api/customer/v1/chat/completions`, a request that sends `X-Platform-API-Key` always gets the native request/response format, whatever body fields it includes. A request without that header (Bearer or `x-api-key`) gets the OpenAI format.
+
+The platform key is accepted as `Authorization: Bearer <key>`, `x-api-key: <key>`, or `X-Platform-API-Key`. An `Idempotency-Key` is generated per request when the client does not send one. `max_tokens` / `max_completion_tokens` default to 1024 when absent. Exact receipt fields are returned under `accred` on non-streaming OpenAI responses.
 
 Limits of the compatible routes:
 
-- Responses are text only. `tools` are accepted but not forwarded, and prior tool calls/results are passed to the model as plain text, so agentic tool use (Cursor Agent mode, Claude Code file edits) does not work.
+- Text only. A request with `tools`, images, or `tool` role messages is rejected with a `400` error; agentic tool use (Cursor Agent mode, Claude Code file edits) is not supported.
 - Streaming replays the finished, settled response as chunks; keepalive frames are sent while the reservation and provider call are in flight.
-- Images and documents are replaced by a placeholder.
 - Request bodies up to 4 MB are accepted on these paths; the model's input bound still applies.
 
 ## Credit units and on-chain safety
@@ -40,7 +43,7 @@ Limits of the compatible routes:
 - `POST /api/customer/reconcile` accepts an owner-scoped ledger ID, rechecks exact finalized chain evidence, and returns `200` for terminal states or `202` while evidence remains pending. It never redispatches inference. The Playground's recent-usage rows expose a per-request reconcile action.
 - An API key is created with an immutable snapshot of its owner's verified chain-4663 wallet. A later wallet relink does not remap the key; inference is rejected until a new key is created for the new wallet. Existing keys without that snapshot cannot make metered requests.
 - Signer transactions are serialized across API-server processes with a database advisory lock and locally with an ethers nonce manager. Each request has a globally unique bytes32 vault request ID.
-- Gateway activation also requires positive `CUSTOMER_DAILY_BUDGET_CREDITS`, `CUSTOMER_USER_RPM`, and `CUSTOMER_KEY_RPM` settings. The server applies daily budget accounting in microcredits and serialized owner/key request limits before reserving funds. Model requests are bounded to 8,192 UTF-8 bytes of serialized messages and at most 8,192 output tokens.
+- Gateway activation also requires positive `CUSTOMER_DAILY_BUDGET_CREDITS`, `CUSTOMER_USER_RPM`, and `CUSTOMER_KEY_RPM` settings. The server applies daily budget accounting in microcredits and serialized owner/key request limits before reserving funds. Model requests are bounded to 400,000 UTF-8 bytes of serialized messages and at most 8,192 output tokens.
 - Gateway writes require explicit enablement and a configured Robinhood Mainnet (chain ID **4663**) RPC, vault, and authorized signer. The server fails closed with `503` if any setting is absent or the network differs.
 
 ## Provider and capability coverage

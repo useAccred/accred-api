@@ -32,7 +32,6 @@ app.use(cookieParser());
 // body limit. express.json skips bodies that are already parsed, so the global
 // 32kb parser below does not re-check these requests.
 app.use(["/api/openai", "/api/customer/v1"], express.json({ limit: "4mb" }));
-app.use(["/api/customer/openai", "/api/customer/anthropic"], express.json({ limit: "4mb" }));
 app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: true }));
 

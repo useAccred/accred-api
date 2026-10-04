@@ -175,11 +175,14 @@ router.get(["/openai/v1/models", "/customer/v1/models"], requireBearerPlatformKe
   }
 });
 
-/** On the shared /customer/v1 path, native clients (x-platform-api-key + maxOutputTokens) fall through. */
+/**
+ * On the shared /customer/v1 path, any request that carries X-Platform-API-Key is a native
+ * client and falls through to the original route unchanged (its response shape never depends
+ * on which optional body fields are present). Only requests without that header (Bearer or
+ * x-api-key clients such as Cursor) get the OpenAI shape.
+ */
 function isOpenAIStyle(req: Request): boolean {
-  const bearerOnly = !req.get("x-platform-api-key") && /^Bearer\s/i.test(req.get("authorization") ?? "");
-  const body = req.body as Record<string, unknown> | undefined;
-  return bearerOnly || !body || typeof body !== "object" || body.maxOutputTokens === undefined;
+  return !req.get("x-platform-api-key");
 }
 
 router.post("/customer/v1/chat/completions", (req, res, next) => {

@@ -55,6 +55,10 @@ function authServerMetadata(req: Request, res: Response): void {
 }
 router.get("/.well-known/oauth-authorization-server", authServerMetadata);
 router.get("/.well-known/oauth-authorization-server/api", authServerMetadata);
+// Clients that follow RFC 8414 for an issuer with a path (https://host/api) end up
+// probing <issuer>/.well-known/openid-configuration, so serve the same metadata there.
+router.get("/.well-known/openid-configuration", authServerMetadata);
+router.get("/.well-known/openid-configuration/api", authServerMetadata);
 
 router.post("/oauth/register", async (req, res): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
