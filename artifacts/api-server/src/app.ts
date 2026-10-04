@@ -28,6 +28,9 @@ app.use(
 );
 app.use(cors());
 app.use(cookieParser());
+// The OpenAI/Anthropic-compatible customer routes carry full editor context;
+// every other route keeps the 32kb limit.
+app.use(["/api/customer/openai", "/api/customer/anthropic"], express.json({ limit: "4mb" }));
 app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: true }));
 
