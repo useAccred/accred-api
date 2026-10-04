@@ -9,7 +9,7 @@ export function internalToken(): string {
 
 /** Points the credit API at its own endpoints unless an external router or signer is configured explicitly. */
 export function configureInternalCreditService(): void {
-  const host = process.env.APP_DOMAIN?.trim();
+  const host = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() || process.env.APP_DOMAIN;
   if (!host || !process.env.SESSION_SECRET || !process.env.CASHBACK_PRIVATE_KEY) return;
   const token = internalToken();
   process.env.CREDIT_ROUTER_ALLOWED_HOSTS ??= host;

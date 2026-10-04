@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { PrivyClient } from "@privy-io/node";
+import { isInternalMcpCall, lookupAccessToken } from "./mcp-oauth";
 
 export type VerifiedPrivySession = {
   provider: "privy";
@@ -44,6 +45,24 @@ export async function requirePrivySession(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  const header = req.get("authorization");
+  if (isInternalMcpCall(req)) {
+    const mcpToken = header && /^Bearer\s+\S+$/i.test(header) ? header.replace(/^Bearer\s+/i, "") : "";
+    const ctx = mcpToken ? await lookupAccessToken(mcpToken).catch(() => null) : null;
+    if (!ctx) {
+      res.status(401).json({ error: "The connector token is invalid or expired." });
+      return;
+    }
+    req.privySession = {
+      provider: "privy",
+      userId: ctx.ownerUserId,
+      sessionId: `mcp:${ctx.tokenId}`,
+      verifiedAt: new Date().toISOString(),
+    };
+    next();
+    return;
+  }
+
   if (!privyClient) {
     res.status(503).json({
       error: "Privy server verification is not configured.",
@@ -52,7 +71,6 @@ export async function requirePrivySession(
     return;
   }
 
-  const header = req.get("authorization");
   const token =
     header && /^Bearer\s+\S+$/i.test(header)
       ? header.replace(/^Bearer\s+/i, "")

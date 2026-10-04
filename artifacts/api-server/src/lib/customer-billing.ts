@@ -928,12 +928,17 @@ export async function runCustomerCompletion(input: {
   if (!reservationInputRate) return { statusCode: 503, error: "No exact worst-case input cost is configured for this model." };
   const maxOutputTokens = input.request.maxOutputTokens ?? 1024;
   const serializedMessages = JSON.stringify(input.request.messages);
-  if (Buffer.byteLength(serializedMessages, "utf8") > model.maxInputTokens ||
+  const serializedInputBytes = Buffer.byteLength(serializedMessages, "utf8");
+  if (serializedInputBytes > model.maxInputTokens ||
       maxOutputTokens > model.maxOutputTokens || maxOutputTokens < 1) {
     return { statusCode: 400, error: "The request exceeds this model's input or output token safety bound." };
   }
+  // Every text token covers at least one UTF-8 byte, and the JSON envelope
+  // per message outweighs provider chat-template tokens, so the serialized
+  // byte count is a worst-case input-token bound for this request. Reserving
+  // against it (instead of the global cap) keeps small requests' holds small.
   const reservationMicrocredits = reserveMicrocredits(
-    rates.inputRate, rates.outputRate, model.maxInputTokens, maxOutputTokens, reservationInputRate,
+    rates.inputRate, rates.outputRate, serializedInputBytes, maxOutputTokens, reservationInputRate,
   );
   if (reservationMicrocredits <= 0n) {
     return { statusCode: 503, error: "The configured rates do not produce a positive on-chain reservation." };

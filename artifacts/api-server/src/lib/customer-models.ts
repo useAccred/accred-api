@@ -53,12 +53,15 @@ type RegistryEntry = {
   handler: boolean;
 };
 
-const MAX_INPUT_TOKENS = 8192;
+// Upper bound on serialized message bytes per request (also a worst-case
+// input-token bound). Reservations are sized per request from the actual
+// serialized size, so this cap does not inflate holds for small requests.
+const MAX_INPUT_TOKENS = 400_000;
 const MAX_OUTPUT_TOKENS = 8192;
 
-// Static allowlist. Model names supplied by callers or environment
-// configuration are never trusted.
-const SUPPORTED_MODELS: readonly RegistryEntry[] = [
+// This allowlist is based on the current Replit AI Integration skills, not on
+// model names supplied by callers or environment configuration.
+const REPLIT_MODELS: readonly RegistryEntry[] = [
   ...[
     "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna",
     "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4",
@@ -478,7 +481,7 @@ export async function listCustomerModels(): Promise<CustomerModel[]> {
   const gatewayAvailable = isCustomerGatewayConfigured();
   const models: CustomerModel[] = [];
 
-  for (const model of SUPPORTED_MODELS) {
+  for (const model of REPLIT_MODELS) {
     const key = `${model.provider}/${model.id}`;
     const hasConfiguredSnapshot = prices.has(key);
     const configured = prices.get(key);
